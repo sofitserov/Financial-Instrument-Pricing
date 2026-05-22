@@ -10,7 +10,6 @@ The engine currently benchmarks active strategies against a passive Buy & Hold b
 
 | Metric | Value |
 | :--- | :--- |
-| **Initial Capital** | $10,000.00 |
 | **Strategy Return (20/50 SMA)** | -29.69% |
 | **Benchmark Return (PEP)** | -10.81% |
 | **Alpha** | -18.88% |
