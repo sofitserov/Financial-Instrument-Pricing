@@ -1,4 +1,4 @@
-###Phase 1:
+**Phase 1:**
 - Established a code architecture with CMake to combine python and c++ through pybind
 - AlphaEngine is a hybrid quantitative backtesting framework that combines the research flexibility of Python with the execution power of C++.
 - By using pybind11, the project offloads heavy mathematical computations and portfolio state management (tracking cash/positions) to a C++ core.
@@ -15,3 +15,7 @@ The engine currently benchmarks active strategies against a passive Buy & Hold b
 | **Alpha** | -18.88% |
 
 **Observation:** The negative alpha indicates the 20/50 SMA crossover is too lagging for current PEP volatility. This provides a baseline for future optimization using faster indicators or mean-reversion logic.
+
+**Stateful vs. Stateless Backtesting**
+- Most backtesters calculate a list of signals in Python without accounting for whether they actually have the money to buy the stock.
+- By keeping cash and position as private members in C++ , the engine "remembers" the past. If all cash is spent on Monday, the C++ engine will automatically prevent a "Buy" on Tuesday, even if the signal is positive.
