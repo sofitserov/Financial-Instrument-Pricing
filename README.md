@@ -1,8 +1,10 @@
 **Setup**
+
 Ensure you have a C++ compiler (Clang/GCC), CMake, and the required Python libraries installed:
 ```pip install yfinance pandas matplotlib```
 
 We use CMake to manage the build process. This creates the AlphaEngine shared object file:
+
 Create and enter build directory:
 ```mkdir build && cd build```
 
