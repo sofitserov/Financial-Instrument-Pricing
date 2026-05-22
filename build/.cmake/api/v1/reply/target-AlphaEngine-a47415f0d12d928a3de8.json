@@ -41,6 +41,12 @@
 				"file" : 0,
 				"line" : 161,
 				"parent" : 1
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 193,
+				"parent" : 1
 			}
 		]
 	},
@@ -50,7 +56,11 @@
 			"compileCommandFragments" : 
 			[
 				{
-					"fragment" : "-g -std=gnu++20 -arch arm64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX15.2.sdk -mmacosx-version-min=15.1 -fPIC -fvisibility=hidden"
+					"fragment" : "-std=gnu++20 -arch arm64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX15.2.sdk -mmacosx-version-min=15.1 -fPIC -fvisibility=hidden"
+				},
+				{
+					"backtrace" : 4,
+					"fragment" : "-flto"
 				}
 			],
 			"defines" : 
@@ -116,6 +126,11 @@
 			{
 				"backtrace" : 3,
 				"fragment" : "dynamic_lookup",
+				"role" : "flags"
+			},
+			{
+				"backtrace" : 4,
+				"fragment" : "-flto",
 				"role" : "flags"
 			}
 		],
