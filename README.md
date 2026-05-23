@@ -1,32 +1,32 @@
-**Setup**
+##Setup
 
-Ensure you have a C++ compiler (Clang/GCC), CMake, and the required Python libraries installed:
+###Ensure you have a C++ compiler (Clang/GCC), CMake, and the required Python libraries installed:
 
 ```pip install yfinance pandas matplotlib```
 
-We use CMake to manage the build process. This creates the AlphaEngine shared object file:
+###We use CMake to manage the build process. This creates the AlphaEngine shared object file:
 
-Create and enter build directory:
+**Create and enter build directory:**
 
 ```mkdir build && cd build```
 
-Generate build files and compile:
+**Generate build files and compile:**
 
 ```cmake ..```
 
 ```make```
 
-Move the compiled library back to the root directory:
+**Move the compiled library back to the root directory:**
 
 ```cp AlphaEngine.cpython-*.so ..```
 
 ```cd ..```
 
-Run:
+**Run:**
 
 ```python3 main.py```
 
-**Phase 1:**
+##Phase 1:
 - Established a code architecture with CMake to combine python and c++ through pybind
 - AlphaEngine is a hybrid quantitative backtesting framework that combines the research flexibility of Python with the execution power of C++.
 - By using pybind11, the project offloads heavy mathematical computations and portfolio state management (tracking cash/positions) to a C++ core.
