@@ -1,0 +1,8 @@
+[
+{
+  "directory": "/Users/stasofitserov/Financial Instrument Pricing/build",
+  "command": "/usr/bin/clang++ -DAlphaEngine_EXPORTS -isystem /opt/homebrew/include -isystem /Library/Frameworks/Python.framework/Versions/3.13/include/python3.13 -g -std=gnu++20 -arch arm64 -isysroot /Library/Developer/CommandLineTools/SDKs/MacOSX15.2.sdk -mmacosx-version-min=15.1 -fPIC -fvisibility=hidden -o CMakeFiles/AlphaEngine.dir/wrapper.cpp.o -c \"/Users/stasofitserov/Financial Instrument Pricing/wrapper.cpp\"",
+  "file": "/Users/stasofitserov/Financial Instrument Pricing/wrapper.cpp",
+  "output": "CMakeFiles/AlphaEngine.dir/wrapper.cpp.o"
+}
+]

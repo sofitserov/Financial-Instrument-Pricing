@@ -1,73 +1,75 @@
-import AlphaEngine  # This imports your .so file
+import AlphaEngine
 import yfinance as yf
 import matplotlib.pyplot as plt
+import numpy as np
+from AlphaEngine import StrategyType
 
-# 1. Download real market data
+# Market data
 data = yf.download("PEP", start="2024-01-01", end="2026-01-01")['Close']
 prices = data.values.flatten().tolist()
 
-# 2. Initialize your C++ Strategy
-strat = AlphaEngine.MAStrategy()
 
-# 3. Generate signals for the timeline
-signals = []
-for i in range(len(prices)):
-    # Feed the growing list of prices to C++
-    sig = strat.generate_signal(prices[:i+1], 20, 50)
-    signals.append(sig)
+# Initialize C++ Strategy with Type
+engine = AlphaEngine.AlphaEngine(10000.0, StrategyType.SMA)
 
-# 4. Comprehensive Visualization
+# Define Parameters for the Strategy
+# Replaces the hardcoded 20, 50 
+sma_params = {
+    "fast_w": 10.0,
+    "slow_w": 30.0
+}
+# Run the strategy
+engine.run(prices, sma_params)
+
+# Get equity curve from strategy to later plot against benchmark
+equity_curve = engine.get_history()
+
+#Get raw data for benchmark (Buy & Hold)
+equity_curve = np.array(engine.get_history())
+benchmark_prices = np.array(prices)
+
+
+# Visualization
+strategy_returns = equity_curve / equity_curve[0]
+benchmark_returns = benchmark_prices / benchmark_prices[0]
+
+buys = engine.get_buy_signals()
+sells = engine.get_sell_signals()
+
+#Plotting
 plt.figure(figsize=(12, 6))
 
-# Plot the raw price data
-plt.plot(prices, label="PEP Price", color='blue', alpha=0.3)
+plt.plot(strategy_returns, label=f"Strategy ({((strategy_returns[-1]-1)*100):.2f}%)", color="lime", linewidth=1.5, alpha=0.8)
+plt.plot(benchmark_returns, label=f"Buy & Hold PEP ({((benchmark_returns[-1]-1)*100):.2f}%)", color="blue", alpha=0.5)
+plt.scatter(buys, benchmark_returns[buys], marker='^', color='green', s=100, label='Buy Signal', zorder=5)
+plt.scatter(sells, benchmark_returns[sells], marker='v', color='red', s=100, label='Sell Signal', zorder=5)
 
-# Calculate SMAs using Pandas for visual comparison
-import pandas as pd
-price_series = pd.Series(prices)
-sma20 = price_series.rolling(window=20).mean()
-sma50 = price_series.rolling(window=50).mean()
+#Line at 1.0 - Break-even point
+plt.axhline(y=1.0, color='black', linestyle='--', alpha=0.3)
 
-# Plot the Moving Averages
-plt.plot(sma20, label="20d SMA (Fast)", color='orange', linewidth=1.5)
-plt.plot(sma50, label="50d SMA (Slow)", color='green', linewidth=1.5)
-
-plt.title("C++ Powered Strategy: PEP Price + Moving Averages")
-plt.xlabel("Days")
-plt.ylabel("Price (USD)")
+plt.title("Relative Performance: Strategy vs. Benchmark")
+plt.ylabel("Cumulative Return (Multiple of Initial Investment)")
 plt.legend()
-plt.grid(True, alpha=0.3)
-plt.show() # This will now show everything in one window
+plt.grid(True, alpha=0.2)
+plt.show()
 
-print(f"Final Portfolio Value: ${strat.get_balance() + (strat.get_position() * prices[-1])}")
+# Extract Results
+final_balance = engine.get_balance()
+print(f"Strategy finished. Final Balance: ${final_balance:.2f}")
 
-# While inside the 'build' folder:
-#cp AlphaEngine.cpython-313-darwin.so ..
-#Every time you touch a .hpp or .cpp file, you must follow this 3-step ritual:
-#1. Modify: Change the C++ logic or add a new binding in wrapper.cpp.
-#2. Rebuild: Run `cmake .. && make` inside the 'build' folder to recompile the .so file.
-#3. Refresh: Restart this Python script to see the changes in action.
+# Compare to benchmark
+final_strategy_pct = (strategy_returns[-1] - 1) * 100
+final_benchmark_pct = (benchmark_returns[-1] - 1) * 100
 
-# --- Performance Benchmarking ---
-initial_capital = 10000.0
-
-# 1. Strategy Performance (C++ Core)
-# Total = Current Cash + (Shares Held * Current Price)
-strategy_final_total = strat.get_balance() + (strat.get_position() * prices[-1])
-strategy_return_pct = ((strategy_final_total - initial_capital) / initial_capital) * 100
-
-# 2. Buy & Hold Performance (The Benchmark)
-# How many shares could we buy on day 1?
-shares_to_buy = initial_capital // prices[0] 
-remaining_cash = initial_capital % prices[0]
-# Value today = (Shares * Current Price) + leftover cash
-buy_hold_final_total = (shares_to_buy * prices[-1]) + remaining_cash
-buy_hold_return_pct = ((buy_hold_final_total - initial_capital) / initial_capital) * 100
+alpha = final_strategy_pct - final_benchmark_pct
 
 print("\n" + "="*30)
-print(f"STRATEGY VS BENCHMARK")
+print("PERFORMANCE SUMMARY")
 print("="*30)
-print(f"C++ Strategy Final:  ${strategy_final_total:.2f} ({strategy_return_pct:.2f}%)")
-print(f"Buy & Hold Final:    ${buy_hold_final_total:.2f} ({buy_hold_return_pct:.2f}%)")
-print(f"Alpha (Difference):  {strategy_return_pct - buy_hold_return_pct:.2f}%")
+print(f"Strategy Return:  {final_strategy_pct:>8.2f}%")
+print(f"Benchmark Return: {final_benchmark_pct:>8.2f}%")
+print("-" * 30)
+print(f"Alpha (Difference): {alpha:>7.2f}%")
 print("="*30)
+
+

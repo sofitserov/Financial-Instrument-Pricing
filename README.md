@@ -11,7 +11,8 @@ git clone https://github.com/sofitserov/Financial-Instrument-Pricing
 pip install yfinance pandas matplotlib
 ```
 
-### We use CMake to manage the build process. This creates the AlphaEngine shared object file:
+### CMake is used for the build process. 3 & 4 create the AlphaEngine shared object file:
+- Keep in mind that steps 4 and 5 must be run every time cahnges are made to strategy.hpp to update the so file
 
 3. Create and enter build directory:
 ```bash
@@ -36,12 +37,12 @@ cd ..
 python3 main.py
 ```
 
-## Phase 1:
+## 5/22/2026: Setup
 - Established a code architecture with CMake to combine python and c++ through pybind
-- AlphaEngine is a hybrid quantitative backtesting framework that combines the research flexibility of Python with the execution power of C++.
-- By using pybind11, the project offloads heavy mathematical computations and portfolio state management (tracking cash/positions) to a C++ core.
+- AlphaEngine is a hybrid quantitative backtesting framework that combines the flexibility of Python with the execution power of C++.
+- By using pybind11, the project offloads heavy mathematical computations and portfolio state management (tracking cash/positions) to C++.
 
-- Wrote a very basic algorithm to track a 20-day and 50-day moving average signal for Pepsi stock from 1/1/2024 - 1/1/2026
+- Wrote a very basic algorithm to track a 20-day and 50-day moving average signal for Pepsi stock from 1/1/2024 - 1/1/2026 to ensure all parts were working as intended
 
 Performance Analysis: Test against baseline
 The engine currently benchmarks active strategies against a passive Buy & Hold baseline.
@@ -53,8 +54,21 @@ The engine currently benchmarks active strategies against a passive Buy & Hold b
 | **Alpha** | -18.88% |
 
 ### Observation: 
-- The negative alpha indicates the 20/50 SMA crossover is too lagging for current PEP volatility. This provides a baseline for future optimization using faster indicators or mean-reversion logic.
+- The negative alpha indicates the 20/50 SMA crossover is too slow for current volatility. 
+- This provides a baseline for future optimization using faster indicators or mean-reversion logic. But we are not too worried about the actual strategy at the moment.
 
 ### Stateful vs. Stateless Backtesting
-- Most backtesters calculate a list of signals in Python without accounting for whether they actually have the money to buy the stock.
-- By keeping cash and position as private members in C++ , the engine "remembers" the past. If all cash is spent on Monday, the C++ engine will automatically prevent a "Buy" on Tuesday, even if the signal is positive.
+- By keeping cash and position as private members in C++ , the engine logs our cash balance. 
+- If all cash is spent, the C++ engine will automatically prevent a future buy.
+
+
+## 5/24/2026: Overhaul for future expansion
+- C++ now handles the moving average calculations 
+- strategy.hpp
+    - Created an AlphaEngine class which will contain all of the logic for strategies implemented in the future.
+    - AlphaEngine objects have StrategyType member variable, which dictate which strategy function to run.
+- main.py
+    - choose the strategy when creating the AlphaEngine object
+    - Compare to benchmark and break-even point
+    - Moving average values are no longer hard-coded and are passed as parameters to the run function.
+
