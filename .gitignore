@@ -1,0 +1,18 @@
+# Compiled Python/C++ Binaries
+*.so
+*.dylib
+*.dll
+
+# Build Artifacts
+build/
+bin/
+obj/
+
+# Python Environment & Cache
+__pycache__/
+*.pyc
+.venv/
+myenv/
+
+# OS specific files
+.DS_Store
