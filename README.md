@@ -40,7 +40,7 @@ python3 main.py
 ## 5/22/2026: Setup
 - Established a code architecture with CMake to combine python and c++ through pybind
 - AlphaEngine is a hybrid quantitative backtesting framework that combines the flexibility of Python with the execution power of C++.
-- By using pybind11, the project offloads heavy mathematical computations and portfolio state management (tracking cash/positions) to C++.
+- By using pybind11, the project offloads heavy computations and portfolio state management (tracking cash/positions) to C++.
 
 - Wrote a very basic algorithm to track a 20-day and 50-day moving average signal for Pepsi stock from 1/1/2024 - 1/1/2026 to ensure all parts were working as intended
 
@@ -71,4 +71,17 @@ The engine currently benchmarks active strategies against a passive Buy & Hold b
     - choose the strategy when creating the AlphaEngine object
     - Compare to benchmark and break-even point
     - Moving average values are no longer hard-coded and are passed as parameters to the run function.
+
+## 5/26/2026: File separation and bug fixes
+- Bug prevented strategy from buying or selling multiple positions in a row
+- main.py now contains 2 functions for calculating the Sharpe ratio as well as running the strategy and plotting results
+- Added very simple position sizing where we buy 10% worth of our cash and sell 10% of our total position
+- Next steps
+    - Implement transaction costs and slippage
+    - we also sometimes fall into the trap of having a negative position which requires investigation 
+
+![Mean Reversion Strategy on S&P 500 from 01-01-2024 -- 01-01-2026](images/MR_SPY_1.png)
+- We can see that the strategy buys too aggressively during downturns, so it would be useful to investigate more signals before buying
+
+
 
