@@ -46,26 +46,25 @@ class AlphaEngine{
     std::vector<int> buy_indices;
     std::vector<int> sell_indices;
 
-    //implement sizing logic of 10% of our cash per trade
     void buy_stock(double price, int index) {
         if (m_cash < price) return; // safety check
-        double size = 0.1 * (m_cash/ price); // example: buy 10% of cash for each trade
+        int size = 0.1 * (m_cash/ price); // example: buy 10% of cash for each trade
         m_cash -= size * price;
         buy_indices.push_back(index);
         std::cout << "[TRADE] BUY at " << price << " (Index: " << index << ")" << std::endl;
         m_trades++;
-        m_position += (int) size;
+        m_position += size;
         std::cout << "[STATUS] Cash: " << m_cash << ", Position: " << m_position << std::endl;
     }
 
     void sell_stock(double price, int index) {
         if(m_position <= 0) return; // safety check
-        double size = 0.1 * (m_cash + price * m_position)/ price; // example: sell 10% of total equity for each trade
+        int size = 0.1 * (m_cash + price * m_position) / price; // example: sell 10% of total equity for each trade
         m_cash += size * price;
         sell_indices.push_back(index);
         std::cout << "[TRADE] SELL at " << price << " (Index: " << index << ")" << std::endl;
         m_trades++;
-        m_position -= (int) size;
+        m_position -= size;
         std::cout << "[STATUS] Cash: " << m_cash << ", Position: " << m_position << std::endl;
     }
     void liquidate(double current_price, int index) {
@@ -108,7 +107,12 @@ class AlphaEngine{
         }
         return sum / window;
     }
+
+    //this buys and sells too aggresively, we can add a buffer zone to prevent overtrading
+    //We can also add time-based trades to prvent over or undertrading
+    //I would probabyl want to implement those here rather than in the buy to sell function to keep those functions as simple as possible
     void run_mean_reversion_logic(const std::vector<double>& prices, int window, double entry_z, double exit_z){
+        std::vector<double> z_scores;
         for (int i = window; i < prices.size(); ++i) {
             double current_price = prices[i];
             double mean = calculate_sma(prices, window, i);
@@ -120,11 +124,15 @@ class AlphaEngine{
             double stdev = std::sqrt(sq_sum / window);
 
             double z_score = (prices[i] - mean) / stdev;
+            z_scores.push_back(z_score);
 
             if (z_score <= -entry_z){
-                buy_stock(current_price, i);
+                int n = z_scores.size();
+                if (n >= 2 && z_scores[n-1] > z_scores[n-2])
+                    buy_stock(current_price, i);
+                if(z_scores.size() <= 2) // if we don't have enough data for the buffer zone, just execute the trade
+                    buy_stock(current_price, i);
             } 
-            // or exit_z
             else if (z_score >= exit_z){
                 sell_stock(current_price, i);
             }
@@ -133,6 +141,8 @@ class AlphaEngine{
         }
         liquidate(prices.back(), prices.size() - 1);
     }
+
+    
 
 };
 
