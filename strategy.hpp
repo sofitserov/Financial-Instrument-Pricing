@@ -1,6 +1,8 @@
 // Next ideas to implement:
-// 1. Add transaction costs and slippage to make it more realistic. 
-// 2. 
+// 1. Add customization for profit taking and time stop 
+// 2. Relax entry condition to allow for more frequent trades (e.g. SMA(2) < SMA(8) * 0.995 instead of 0.99)
+// 3. Prevent fixed percentages for exit and allow for more volatility
+// 4. Introduce trend filter
 
 #pragma once
 #include <vector>
@@ -63,7 +65,7 @@ public:
             double entry_p = entry_prices[symbol];
             double high_1_bar_ago = h_hist[h_hist.size() - 2]; // High[1]
 
-            bool profit_target = (close > high_1_bar_ago);      // Close > High[1]
+            bool profit_target = (close > high_1_bar_ago * 1.05);      // Close > High[1] * 1.08 (8% Profit Target)
             bool time_stop = (bars_held[symbol] >= 5);     // Sell after 5 bars
             bool stop_loss = (close <= entry_p * 0.97);    // 3% Stop Loss
 

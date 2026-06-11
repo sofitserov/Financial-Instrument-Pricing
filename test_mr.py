@@ -54,12 +54,22 @@ engine.liquidate_all()
 equity_array = np.array(equity_curve)
 sharpe_score = calculate_sharpe_ratio(equity_array)
 
-print("\n" + "="*40)
+"""print("\n" + "="*40)
 print(f"BACKTEST PROCESS COMPLETED SUCCESSFULLY")
 print(f"Ending Liquid Portfolio Cash Balance: ${engine.get_balance():.2f}")
 print(f"Ending Consolidated Portfolio Valuation: ${engine.compute_equity():.2f}")
-print(f"Sharpe Ratio: {sharpe_score:.2f}")
-print("="*40)
+"""
+print(f"\nSharpe Ratio: {sharpe_score:.2f}")
+
+
+initial_investment = 10000.0
+shares_per_stock = (initial_investment / len(close_data.columns)) / close_data.iloc[0]
+ending_value_bh = (close_data.iloc[-1] * shares_per_stock).sum()
+
+print(f"==========================================")
+print(f"YOUR STRATEGY VALUATION: ${engine.compute_equity():.2f}")
+print(f"BUY & HOLD BENCHMARK VALUATION: ${ending_value_bh:.2f}")
+print(f"==========================================")
 
 
 
