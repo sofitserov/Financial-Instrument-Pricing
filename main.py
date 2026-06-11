@@ -1,17 +1,27 @@
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 
-def calculate_sharpe_ratio(equity_history, risk_free_rate=0.0):
-    daily_returns = np.diff(equity_history) / equity_history[:-1]
+def calculate_sharpe_ratio(equity_history, risk_free_rate=0.05):
+    # 1. Calculate daily returns
+    equity_series = pd.Series(equity_history)
+    daily_returns = equity_series.pct_change().dropna()
     
-    avg_return = np.mean(daily_returns)
-    std_return = np.std(daily_returns)
-    
-    if std_return == 0:
+    if daily_returns.std() == 0:
         return 0.0
+        
+    # 2. Deconstruct the annualized risk-free rate down to a DAILY risk-free rate
+    # 252 trading days in a typical market year
+    daily_rf = risk_free_rate / 252 
     
-    sharpe = (avg_return - risk_free_rate) / std_return * np.sqrt(252)
-    return sharpe
+    # 3. Calculate Daily Sharpe
+    expected_daily_excess_return = daily_returns.mean() - daily_rf
+    daily_sharpe = expected_daily_excess_return / daily_returns.std()
+    
+    # 4. Annualize the Sharpe Ratio correctly using the square-root of time rule
+    annualized_sharpe = daily_sharpe * np.sqrt(252)
+    
+    return annualized_sharpe
 
 
 

@@ -1,148 +1,168 @@
+// Next ideas to implement:
+// 1. Add transaction costs and slippage to make it more realistic. 
+// 2. 
+
+#pragma once
 #include <vector>
 #include <numeric>
 #include <algorithm>
 #include <iostream>
-#include <stdio.h>
 #include <map>
 #include <string>
-
-// Next ideas to implement:
-// 1. Add transaction costs and slippage to make it more realistic. 
-// 2. Implement a more complex strategy, like RSI or MACD, to see how it performs against the simple moving average crossover.
-// 3. Implement different SMA combinations (e.g., 10/30, 50/200) and compare their performance.
+#include <cmath>
+#include <unordered_map>
+#include <deque>
+#include <memory>
 
 enum class StrategyType { SMA, MEAN_REVERSION, RSI };
 
-class AlphaEngine{
-    public:
-    AlphaEngine(double initial_cash, StrategyType type) : m_cash(initial_cash), selected_type(type) {}
-    std::vector<double> get_history() const { return history; }
-    double get_balance() const { return m_cash; }
-    int get_position() const { return m_position; }
-    std::vector<int> get_buy_signals() const { return buy_indices; }
-    std::vector<int> get_sell_signals() const { return sell_indices; }
-
-    void run(const std::vector<double>& prices, std::map<std::string, double> params) {
-        if (selected_type == StrategyType::SMA) {
-            // Search for passed parameters, if not found use defaults
-            int fast_w = params.count("fast_w") ? static_cast<int>(params["fast_w"]) : 20; 
-            int slow_w = params.count("slow_w") ? static_cast<int>(params["slow_w"]) : 50;
-            run_sma_logic(prices, fast_w, slow_w);
-        }
-        if (selected_type == StrategyType::MEAN_REVERSION) {
-            int window = params.count("window") ? static_cast<int>(params["window"]) : 20;
-            double entry_z = params.count("entry_z") ? params["entry_z"] : 1.5;
-            double exit_z = params.count("exit_z") ? params["exit_z"] : 0.5;
-            run_mean_reversion_logic(prices, window, entry_z, exit_z);
-        }
-    }
-
-    private:
-    StrategyType selected_type;
-    double m_cash;
-    int m_position = 0; // number of shares currently held
-    int m_trades = 0;
-    std::vector<double> history;
-    std::vector<int> buy_indices;
-    std::vector<int> sell_indices;
-
-    void buy_stock(double price, int index) {
-        if (m_cash < price) return; // safety check
-        int size = 0.1 * (m_cash/ price); // example: buy 10% of cash for each trade
-        m_cash -= size * price;
-        buy_indices.push_back(index);
-        std::cout << "[TRADE] BUY at " << price << " (Index: " << index << ")" << std::endl;
-        m_trades++;
-        m_position += size;
-        std::cout << "[STATUS] Cash: " << m_cash << ", Position: " << m_position << std::endl;
-    }
-
-    void sell_stock(double price, int index) {
-        if(m_position <= 0) return; // safety check
-        int size = 0.1 * (m_cash + price * m_position) / price; // example: sell 10% of total equity for each trade
-        m_cash += size * price;
-        sell_indices.push_back(index);
-        std::cout << "[TRADE] SELL at " << price << " (Index: " << index << ")" << std::endl;
-        m_trades++;
-        m_position -= size;
-        std::cout << "[STATUS] Cash: " << m_cash << ", Position: " << m_position << std::endl;
-    }
-    void liquidate(double current_price, int index) {
-        if (m_position > 0) {
-            m_cash += m_position * current_price;
-        }
-        std::cout << "[FINAL] Final Cash: " << m_cash << std::endl;
-        std::cout << "[SUMMARY] Total Trades: " << m_trades << std::endl;
-    }
-    void run_sma_logic(const std::vector<double>& prices, int fast_w, int slow_w){
-
-        for (size_t i = slow_w; i < prices.size(); ++i){
-            // Get data for SMA calculation
-            std::vector<double> window(prices.begin() + i - slow_w, prices.begin() + i);
-            
-            double fast_ma = calculate_sma(prices, fast_w, i);
-            double slow_ma = calculate_sma(prices, slow_w, i);
-            double current_price = prices[i];
-
-            // Trade execution logic
-            if (fast_ma > slow_ma && m_position == 0){
-                buy_stock(current_price, i);
-            } 
-            else if (fast_ma < slow_ma && m_position > 0){
-                sell_stock(current_price, i);
-            }
-            // Track equity over time
-            double current_equity = m_cash + (m_position * prices[i]);
-            history.push_back(current_equity);
-        }
-        //close any open position at the end of the backtest to get final performance
-        liquidate(prices.back(), prices.size() - 1);
-    }
-
-    double calculate_sma(const std::vector<double>& v, int window, int end_index) {
-        if (end_index < window) return v[end_index];
-        double sum = 0;
-        for (int i = end_index - window; i < end_index; ++i) {
-            sum += v[i];
-        }
-        return sum / window;
-    }
-
-    //this buys and sells too aggresively, we can add a buffer zone to prevent overtrading
-    //We can also add time-based trades to prvent over or undertrading
-    //I would probabyl want to implement those here rather than in the buy to sell function to keep those functions as simple as possible
-    void run_mean_reversion_logic(const std::vector<double>& prices, int window, double entry_z, double exit_z){
-        std::vector<double> z_scores;
-        for (int i = window; i < prices.size(); ++i) {
-            double current_price = prices[i];
-            double mean = calculate_sma(prices, window, i);
-
-            double sq_sum = 0;
-            for (int j = i - window; j < i; ++j){
-                sq_sum += std::pow(prices[j] - mean, 2);
-            }
-            double stdev = std::sqrt(sq_sum / window);
-
-            double z_score = (prices[i] - mean) / stdev;
-            z_scores.push_back(z_score);
-
-            if (z_score <= -entry_z){
-                int n = z_scores.size();
-                if (n >= 2 && z_scores[n-1] > z_scores[n-2])
-                    buy_stock(current_price, i);
-                if(z_scores.size() <= 2) // if we don't have enough data for the buffer zone, just execute the trade
-                    buy_stock(current_price, i);
-            } 
-            else if (z_score >= exit_z){
-                sell_stock(current_price, i);
-            }
-            double current_equity = m_cash + (m_position * prices[i]);
-            history.push_back(current_equity);
-        }
-        liquidate(prices.back(), prices.size() - 1);
-    }
-
+// BASE STRATEGY INTERFACE (Updated for OHLC Bars)
+class Strategy {
+public:
+    virtual ~Strategy() = default;
+    virtual void on_bar(const std::string& symbol, double open, double high, double low, double close) = 0;
     
+    void set_portfolio_refs(double& cash, std::unordered_map<std::string, int>& positions) {
+        m_cash_ref = &cash;
+        m_positions_ref = &positions;
+    }
 
+protected:
+    double* m_cash_ref = nullptr;
+    std::unordered_map<std::string, int>* m_positions_ref = nullptr;
 };
 
+// CONCRETE STRATEGY: SHARP MEAN REVERSION WITH STOPS
+class SharpMeanReversion : public Strategy {
+private:
+    std::unordered_map<std::string, std::deque<double>> close_history;
+    std::unordered_map<std::string, std::deque<double>> high_history;
+    std::unordered_map<std::string, int> bars_held;
+    std::unordered_map<std::string, double> entry_prices;
+
+public:
+    void on_bar(const std::string& symbol, double open, double high, double low, double close) override {
+        auto& c_hist = close_history[symbol];
+        auto& h_hist = high_history[symbol];
+
+        c_hist.push_back(close);
+        h_hist.push_back(high);
+
+        // Warm up lookback window (Need enough data for SMA 8 and High[1])
+        if (c_hist.size() < 9) return;
+        if (c_hist.size() > 20) {
+            c_hist.pop_front();
+            h_hist.pop_front();
+        }
+
+        int current_pos = (*m_positions_ref)[symbol];
+
+        // EXIT CHECK (Time Stops, Stop Losses, Profit Targets)
+        if (current_pos > 0) {
+            bars_held[symbol]++;
+            double entry_p = entry_prices[symbol];
+            double high_1_bar_ago = h_hist[h_hist.size() - 2]; // High[1]
+
+            bool profit_target = (close > high_1_bar_ago);      // Close > High[1]
+            bool time_stop     = (bars_held[symbol] >= 5);     // Sell after 5 bars
+            bool stop_loss     = (close <= entry_p * 0.97);    // 3% Stop Loss
+
+            if (profit_target || time_stop || stop_loss) {
+                *m_cash_ref += current_pos * close; // Liquidate entire block
+                (*m_positions_ref)[symbol] = 0;
+                bars_held[symbol] = 0;
+                entry_prices[symbol] = 0.0;
+                std::cout << "[EXIT] " << symbol << " @ " << close 
+                          << " | Reason: " << (stop_loss ? "Stop Loss" : (time_stop ? "Time Stop" : "Target Hit")) << std::endl;
+                return;
+            }
+        }
+
+        // 2. ENTRY CHECK
+        int total_open_positions = 0;
+        for (const auto& [sym, pos] : *m_positions_ref) {
+            if (pos > 0) total_open_positions++;
+        }
+
+        // Only enter if we don't own it and portfolio constraint <= 5 active positions holds
+        if (current_pos == 0 && total_open_positions < 5) {
+            // Compute SMA(Close, 2)
+            double sma2 = (c_hist[c_hist.size() - 1] + c_hist[c_hist.size() - 2]) / 2.0;
+
+            // Compute SMA(Close, 8)
+            double sum8 = 0.0;
+            for (size_t i = c_hist.size() - 8; i < c_hist.size(); ++i) {
+                sum8 += c_hist[i];
+            }
+            double sma8 = sum8 / 8.0;
+
+            // Buy Parameter Condition: SMA(2) is 1% below SMA(8)
+            if (sma2 < (sma8 * 0.99)) {
+                int size = static_cast<int>(0.1 * (*m_cash_ref / close)); // Sizing allocation
+                if (size > 0) {
+                    *m_cash_ref -= size * close;
+                    (*m_positions_ref)[symbol] = size;
+                    entry_prices[symbol] = close;
+                    bars_held[symbol] = 0;
+                    std::cout << "[ENTRY] BUY " << symbol << " | Qty: " << size << " @ " << close << std::endl;
+                }
+            }
+        }
+    }
+};
+
+// CORE PORTFOLIO COORDINATION ENGINE
+class AlphaEngine {
+public:
+    AlphaEngine(double initial_cash, StrategyType type) : m_cash(initial_cash) {
+        if (type == StrategyType::MEAN_REVERSION) {
+            active_strategy = std::make_unique<SharpMeanReversion>();
+            active_strategy->set_portfolio_refs(m_cash, positions);
+        }
+    }
+
+    AlphaEngine(const AlphaEngine&) = delete;
+    AlphaEngine& operator=(const AlphaEngine&) = delete;
+
+    double get_balance() const { return m_cash; }
+    std::vector<double> get_history() const { return history; }
+
+    // Updated definition signature to accept 5 OHLC elements from Python data feed
+    void on_bar_mean_reversion(const std::string& symbol, double open, double high, double low, double close) {
+        last_price[symbol] = close;
+        if (active_strategy) {
+            active_strategy->on_bar(symbol, open, high, low, close);
+        }
+    }
+
+    double compute_equity() {
+        double equity = m_cash;
+        for (const auto& [sym, pos] : positions) {
+            if (last_price.find(sym) != last_price.end()) {
+                equity += pos * last_price.at(sym);
+            }
+        }
+        return equity;
+    }
+
+    void record_equity_milestone() { 
+        history.push_back(compute_equity()); 
+    }
+
+    void liquidate_all() {
+        for (auto& [sym, pos] : positions) {
+            if (pos > 0) {
+                m_cash += pos * last_price[sym];
+                std::cout << "[FINAL LIQUIDATION] Closed out " << sym << " @ " << last_price[sym] << std::endl;
+                pos = 0; 
+            }
+        }
+    }
+
+private:
+    double m_cash;
+    std::unique_ptr<Strategy> active_strategy;
+    std::vector<double> history;
+    std::unordered_map<std::string, int> positions;
+    std::unordered_map<std::string, double> last_price;
+};
