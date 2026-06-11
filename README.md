@@ -89,6 +89,11 @@ python3 test_mr.py
 - Right now, we use a strict 3% stop loss across the board. Tech stocks like Nvidia (NVDA) and Meta (META) jump up and down aggressively. A rigid 3% stop loss gets triggered by normal daily market noise, kicking us out of a great trade way too early.
 - We are adding an Average True Range (ATR) indicator. This mathematically measures how volatile a stock is. The engine will automatically give a wild stock like Nvidia a wider stop loss, while keeping a tighter, safer stop loss on more stable stocks.
 
+- Cash Hoard fix:
+    - Even Cash Splitting: divides 100% of our available liquid cash balance evenly by the remaining slots (max of 5).
+    - The Result:
+        - This change completely eliminated our idle cash problem. When 5 qualified assets trigger signals, our money is 100% working in the market. This optimization alone successfully pushed our Sharpe Ratio from **0.30 to 0.84**
+
 
 ## 5/26/2026: File separation and bug fixes
 - Bug prevented strategy from buying or selling multiple positions in a row

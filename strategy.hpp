@@ -64,8 +64,8 @@ public:
             double high_1_bar_ago = h_hist[h_hist.size() - 2]; // High[1]
 
             bool profit_target = (close > high_1_bar_ago);      // Close > High[1]
-            bool time_stop     = (bars_held[symbol] >= 5);     // Sell after 5 bars
-            bool stop_loss     = (close <= entry_p * 0.97);    // 3% Stop Loss
+            bool time_stop = (bars_held[symbol] >= 5);     // Sell after 5 bars
+            bool stop_loss = (close <= entry_p * 0.97);    // 3% Stop Loss
 
             if (profit_target || time_stop || stop_loss) {
                 *m_cash_ref += current_pos * close; // Liquidate entire block
@@ -98,7 +98,15 @@ public:
 
             // Buy Parameter Condition: SMA(2) is 1% below SMA(8)
             if (sma2 < (sma8 * 0.99)) {
-                int size = static_cast<int>(0.1 * (*m_cash_ref / close)); // Sizing allocation
+
+                double target_allocation = (*m_cash_ref) / (5 - total_open_positions); // Equal allocation among remaining slots
+
+                // Safety check: don't spend more liquid cash than you actually have
+                if (target_allocation > *m_cash_ref) {
+                    target_allocation = *m_cash_ref;
+                }
+
+                int size = static_cast<int>(target_allocation / close);
                 if (size > 0) {
                     *m_cash_ref -= size * close;
                     (*m_positions_ref)[symbol] = size;
