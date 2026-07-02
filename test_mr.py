@@ -4,7 +4,18 @@ from main import calculate_sharpe_ratio, run_strategy_and_plot
 import data_loader
 import numpy as np
 
-tickers = ["AAPL", "MSFT", "NVDA", "META", "AMZN", "GOOGL"]
+tickers = [
+    # Tech
+    "AAPL", "MSFT", "NVDA", "META", "AMZN", "GOOGL", "AVGO", "ORCL", "CRM", "AMD",
+    # Healthcare
+    "UNH", "JNJ", "LLY", "PFE", "ABBV",
+    # Financials
+    "JPM", "BAC", "V", "MA", "GS",
+    # Consumer
+    "WMT", "HD", "PG", "KO", "PEP", "MCD",
+    # Industrials / Energy
+    "XOM", "CVX", "CAT", "BA",
+]
 data = data_loader.get_data2(tickers, start="2024-01-01", end="2026-01-01")
 
 # Unpack the richer OHLC data dictionary
@@ -21,10 +32,9 @@ engine = AlphaEngine.AlphaEngine(10000.0, StrategyType.MEAN_REVERSION)
 
 # Step forward day-by-day through the simulation
 for date in close_data.index:
-    if date not in daily_universe or not daily_universe[date]:
-        continue
+    eligible_symbols = set(daily_universe.get(date, []))
 
-    for symbol in daily_universe[date]:
+    for symbol in close_data.columns:
         # Extract individual asset bar records for the day
         o_price = open_data.loc[date, symbol]
         h_price = high_data.loc[date, symbol]
@@ -35,14 +45,10 @@ for date in close_data.index:
         if np.isnan(c_price) or np.isnan(h_price) or np.isnan(o_price):
             continue
 
-        # Stream full OHLC values into the polymorphic C++ strategy layer
-        engine.on_bar_mean_reversion(
-            symbol, 
-            float(o_price), 
-            float(h_price), 
-            float(l_price), 
-            float(c_price)
-        )
+        # Stream full OHLC values into the polymorphic C++ strategy layer.
+        # The momentum filter only gates new entries; held positions are
+        # always processed so exits/stops are never skipped.
+        engine.on_bar(symbol, float(o_price), float(h_price), float(l_price), float(c_price), symbol in eligible_symbols)
 
     # Accumulate dynamic system valuation entries
     equity = engine.compute_equity()

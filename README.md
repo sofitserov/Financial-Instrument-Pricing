@@ -1,151 +1,71 @@
-## Setup
+## AlphaEngine
 
-### Ensure you have a C++ compiler (Clang/GCC) and CMake
+A C++/Python backtesting framework (pybind11) used to test technical trading strategies. The result of most of that testing: the strategies don't hold up. That's the actual point of this repo — it's a log of catching overfitting, look-ahead bias, and accounting bugs that make a backtest look better than it is, not a claim of having found alpha. Every result below is reported after those checks, including the ones that survive it looking mediocre.
 
-1. Clone the Github repository
-```bash
-git clone https://github.com/sofitserov/Financial-Instrument-Pricing
-```
-2. Install the necessary python libraries
-```bash
-pip install yfinance pandas matplotlib numpy
-```
+### Setup
 
-### CMake is used for the build process. 3 & 4 create the AlphaEngine shared object file:
-- Keep in mind that steps 4 and 5 must be run every time changes are made to strategy.hpp to update the so file
+1. `pip install yfinance pandas matplotlib numpy statsmodels`
+2. Build the C++ extensions:
+   ```bash
+   mkdir -p build && cd build
+   cmake .. && make
+   cp AlphaEngine.cpython-*.so AlphaEnginePairs.cpython-*.so ..
+   cd ..
+   ```
+   Re-run this whenever `strategy.hpp` / `pairs_strategy.hpp` change.
+3. Run any strategy script, e.g. `python3 test_basic_mr.py`
 
-3. Create and enter build directory:
-```bash
-mkdir build
-cd build
-```
+### Strategies
 
-4. Generate build files and compile:
-```bash
-cmake ..
-make
-```
+None of these beat buy & hold over the periods tested. Kept anyway, because each one either taught a specific lesson or ruled something out.
 
-5. Move the compiled library back to the root directory:
-```bash
-cp AlphaEngine.cpython-*.so ..
-cd ..
-```
+#### `test_basic_mr.py` — Basic Mean Reversion
+Entry when a stock closes >3% below its own SMA(20); exit when price reverts to the SMA. 30-stock universe, no momentum gating, max 5 concurrent positions, cash split evenly across open slots, no stop-loss/time-stop. The simplest rule in the repo, and it produced the best single-period number: **Sharpe 1.14** in the C++ engine ($16,635 from $10,000), 1.34 in the original pure-Python prototype. The ~0.2 gap between the two isn't a strategy difference — it's traced to position-sizing order (Python sizes all of a day's entries off one fixed daily cash snapshot; C++ resizes after each fill) and where a few end-of-window forced liquidations land in the equity curve. Take the C++ number as the real one, since that's what actually runs. Both numbers are single-period and in-sample — see the next entry before trusting either.
 
-6. Run:
-```bash
-python3 test_mr.py
-```
+#### `test_mr_py.py` — Walk-Forward Validation of the Same Rule
+Takes the exact same basic-MR rule and stops pretending a single 2-year window is meaningful. For each test year 2018–2025, grid-searches stop-loss (5–22%) and time-stop (10–30 days) on all prior years, then trades the winning config on the held-out year:
 
-## 6/10/2026: 
-- Universe Filter: Intersection of the top 15 strongest relative momentum stocks simultaneously ranked across 63-day, 126-day, and 252-day Rate of Change (ROC) windows.
-- Portfolio Constraint: Maximum of 5 concurrent active positions across the entire portfolio.
-- Position Sizing: Dynamic allocation using 10% of remaining liquid cash per trade trigger.
-- Entry Trigger (Daily Close): Price breaks sharply below short-term trends relative to intermediate trends.
-- Exit Triggers (Whichever occurs first):
-  1. Profit Target
-  2. Risk Stop: 3% Hard Stop Loss** relative to the execution entry price
-  3. Time-Based Stop: Unconditional liquidation after holding an asset for 5 consecutive bars.
+| Test Year | Sharpe | Return |
+| :--- | :--- | :--- |
+| 2018 | -1.12 | -19.8% |
+| 2019 | +0.63 | +13.6% |
+| 2020 | -0.10 | -5.6% |
+| 2021 | +0.87 | +20.1% |
+| 2022 | -0.66 | -15.5% |
+| 2023 | +0.34 | +9.2% |
+| 2024 | +1.04 | +24.9% |
+| 2025 | +1.20 | +36.4% |
 
-- Debugging:
-    - The engine respects the global capacity cap. When the portfolio reaches 5 concurrent asset blocks, further entries are strictly blocked
+Stitched across all 8 years: **Sharpe 0.15**, roughly tied with buy & hold. The swing from -1.12 to +1.20 isn't noise in the usual sense — it tracks market regime (down/choppy years punish dip-buying, calm bull years reward it) and each fold's "best" stop-loss lands somewhere between 8% and 22% with no consistent value, which is itself evidence the grid search is fitting each window's noise rather than finding one real parameter.
 
-    ENTRY BUY AMZN | Qty: 4 @ 196.01
-    ENTRY BUY GOOGL | Qty: 5 @ 156.404
-    ENTRY BUY META | Qty: 1 @ 582.114
-    ENTRY BUY AAPL | Qty: 3 @ 202.122  <-- 4th Position
-    ENTRY BUY MSFT | Qty: 2 @ 369.475  <-- 5th Position (Engine holds here)
+#### `test_mr.py` — Mean Reversion + Momentum Filter
+28–30 stock universe (Tech/Healthcare/Financials/Consumer/Industrials), gated to the top-15 by ROC63/126/252 momentum rank before a SMA(2) < SMA(8)×0.99 entry fires. Exits on profit target, 3% stop, or 5-bar time stop. Roughly ten variants were tuned:
 
-    - The 5-bar tracking arrays successfully increment and enforce chronological timeouts.
-
-    ENTRY BUY AAPL | Qty: 4 @ 236.053
-    ... (5 Bars Elapsed)
-    EXIT AAPL @ 234.093 | Reason: Time Stop
-
-    - Stop Loss Calculations
-        - Case (META):
-        - Entry Price: `700.958`
-        - Expected Risk Boundary: $700.958 \times (1 - 0.03) = \mathbf{679.92}$
-        - Logged Execution Close: `665.46`
-
-- Backtesting:
-    - Initial Capital: $10,000.00
-    - Ending Portfolio Value: $10,678.24
-    - Net Return: +6.78%
-    - Sharpe Ratio: 0.3 against 5% risk free rate
-
-- Analysis:
-    - While our initial backtest was profitable and beat a 5% savings rate hurdle, a Sharpe ratio of 0.30 means the strategy is leaving a lot of money on the table. By analyzing our trade logs, we found two major issues in how the code manages money, and we are rewriting the C++ engine to fix them:
-
-1. Fixing the "Cash Hoarding" Problem
-- Right now, the code sizes new trades using 10% of *remaining* cash. If you start with $10,000, your first trade uses $1,000. The next trade uses 10% of what's left ($900), the next uses $810, and so on. By the time you buy your 5th stock, you are barely putting any money into it. This means over 60% of your total account sits completely idle in cash doing nothing. In a booming stock market, holding that much cash severely drags down your total returns.
-- We are rewriting the buying function to look at the total value of the entire portfolio (Cash + Open Positions), not just raw leftover cash. Every single trade will now get a flat 20% chunk of the total account value. This ensures that when we hold 5 stocks, we are 100% fully invested in the market.
-
-2. Selling Completely Instead of Hanging On
-- The legacy code only sells 50% of our shares when a stock hits its target. This leaves the other half of our shares floating in the market without an active plan, exposing us to random losses.
-- Will updated the exit rules to sell 100% of our shares the exact moment a profit target, stop loss, or 5-day time limit is reached.
-
-3. Giving Volatile Stocks More Room
-- Right now, we use a strict 3% stop loss across the board. Tech stocks like Nvidia (NVDA) and Meta (META) jump up and down aggressively. A rigid 3% stop loss gets triggered by normal daily market noise, kicking us out of a great trade way too early.
-- We are adding an Average True Range (ATR) indicator. This mathematically measures how volatile a stock is. The engine will automatically give a wild stock like Nvidia a wider stop loss, while keeping a tighter, safer stop loss on more stable stocks.
-
-- Cash Hoard fix:
-    - Even Cash Splitting: divides 100% of our available liquid cash balance evenly by the remaining slots (max of 5).
-    - The Result:
-        - This change completely eliminated our idle cash problem. When 5 qualified assets trigger signals, our money is 100% working in the market. This optimization alone successfully pushed our Sharpe Ratio from **0.30 to 0.84**
-
-
-## 5/26/2026: File separation and bug fixes
-- Bug prevented strategy from buying or selling multiple positions in a row
-- main.py now contains 2 functions for calculating the Sharpe ratio as well as running the strategy and plotting results
-- Added very simple position sizing where we buy 10% worth of our cash and sell 10% of our total position
-- Next steps
-    - Implement transaction costs and slippage
-    - we also sometimes fall into the trap of having a negative position which requires investigation 
-
-![Mean Reversion Strategy on S&P 500 from 01-01-2024 -- 01-01-2026](images/MR_SPY_1.png)
-- The chart shows the mean reversion strategy on the S&P 500 from 01-01-2024 to 01-01-2026
-- We can see that the strategy buys too aggressively during downturns, so it would be useful to consider more signals before buying
-- Perhaps it would be useful to experiment with time-based trades as well as the MR strategy
-
-## 5/24/2026: Overhaul for future expansion
-- C++ now handles the moving average calculations 
-- strategy.hpp
-    - Created an AlphaEngine class which will contain all of the logic for strategies implemented in the future.
-    - AlphaEngine objects have StrategyType member variable, which dictate which strategy function to run.
-- main.py
-    - choose the strategy when creating the AlphaEngine object
-    - Compare to benchmark and break-even point
-    - Moving average values are no longer hard-coded and are passed as parameters to the run function.
-
-## 5/22/2026: Setup
-- Established a code architecture with CMake to combine python and c++ through pybind
-- AlphaEngine is a hybrid quantitative backtesting framework that combines the flexibility of Python with the execution power of C++.
-- By using pybind11, the project offloads heavy computations and portfolio state management (tracking cash/positions) to C++.
-
-- Wrote a very basic algorithm to track a 20-day and 50-day moving average signal for Pepsi stock from 1/1/2024 - 1/1/2026 to ensure all parts were working as intended
-
-Performance Analysis: Test against baseline
-The engine currently benchmarks active strategies against a passive Buy & Hold baseline.
-
-| Metric | Value |
+| Iteration | Sharpe |
 | :--- | :--- |
-| **Strategy Return (20/50 SMA)** | -29.69% |
-| **Benchmark Return (PEP)** | -10.81% |
-| **Alpha** | -18.88% |
+| Momentum filter ON (buggy eligibility) | 0.76 |
+| Momentum filter OFF | 0.55 |
+| Eligibility bug fixed + ATR(14) stop/time-stop | 0.51 |
+| + ATR(14) profit target | 0.50 |
+| 2021–2023 window (incl. 2022 bear market) | -0.62 |
+| + volatility-normalized entry | 0.39 / -0.31 (2024–26 / 2021–23) |
+| + ~20bps round-trip transaction costs | 0.22 / -0.52 |
 
-### Observation: 
-- The negative alpha indicates the 20/50 SMA crossover is too slow for current volatility. 
-- This provides a baseline for future optimization using faster indicators or mean-reversion logic. But we are not too worried about the actual strategy at the moment.
+Current build: **Sharpe 0.23**. Across every variant and both regimes tested, Sharpe ranged -0.6 to +0.8 and never beat buy & hold — the momentum filter tightens the return distribution somewhat but doesn't create edge, it trades return for smoothness.
 
-### Stateful vs. Stateless Backtesting
-- By keeping cash and position as private members in C++ , the engine logs our cash balance. 
-- If all cash is spent, the C++ engine will automatically prevent a future buy.
+#### `test_rsi.py` — RSI-Ranked Mean Reversion
+Same universe and engine as above, but candidates are ranked by RSI(5) each day so the most-oversold stock gets first claim on an open slot instead of iterating in a fixed order. **Sharpe 0.17** — the ranking change alone doesn't beat the plain version.
 
+#### `test_pairs.py` — Statistical Arbitrage / Pairs Trading
+Engle-Granger cointegration test over a formation period estimates a hedge ratio between two stocks; trades a rolling z-score of their spread, market-neutral (long one leg, short the other). This one took several real iterations to get right, and each iteration is worth knowing about on its own — see "Notable bugs" below. Current state: 66 candidate pairs (sub-industry + economically-motivated cross-sector, e.g. Visa/Mastercard, chipmakers vs. the hyperscalers whose capex funds them), FDR-corrected for the 66 hypotheses tested, formation period 2015–2024. Four pairs survive: V/MA, V/WMT, MA/WMT, AMZN/CRM — worth noting the first three are all pairwise combinations of the same 3 stocks, not 3 independent relationships. **Sharpe 0.49**, still behind buy & hold, but the only strategy here where the underlying statistical relationship is provably not noise.
 
+### Notable bugs found along the way
 
+The actual engineering value in this repo is here, not in the Sharpe column above:
 
-
-
-
-
+- **Cash hoarding**: position sizing used 10% of *remaining* cash per trade, leaving >60% idle. Fixing it to split cash evenly across open slots took Sharpe 0.30 → 0.84 on the original 6-stock universe — a pure accounting fix, not a better idea.
+- **Spurious cointegration**: the first version of `test_pairs.py` tested 86 candidate pairs at a flat p<0.05 with no multiple-testing correction. Applying Benjamini-Hochberg correction dropped all 5 "significant" pairs to zero — they were noise. Pair selection was rebuilt around economically-motivated candidates instead of blind sector combinatorics (see above).
+- **Idle capital, again**: the pairs engine divided cash by a fixed 5-slot cap regardless of how many pairs were actually found — with 2 pairs, 60% of capital sat unused. Scaling the divisor to the real pair count roughly doubled position sizes.
+- **Silent inverse-pair rejection**: the C++ pairs engine computed negative share counts for any inverse (negative hedge-ratio) relationship and just refused to trade it, with no error. Fixed to size and sign both legs from `|hedge_ratio|` instead of assuming a positive one.
+- **Self-dampening stop-loss**: the rolling 30-day z-score window used for entries/exits also fed the stop-loss threshold, so a genuinely breaking pair's rolling stdev inflated *with* the divergence, delaying the stop exactly when it mattered. Widened to 60 days.
+- **Python vs. C++ parity**: porting `test_basic_mr.py` from Python to C++ dropped its Sharpe from 1.34 to 1.14 with identical strategy logic — traced to position-sizing timing and end-of-window liquidation order, not a real behavioral difference.

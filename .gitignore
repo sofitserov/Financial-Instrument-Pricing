@@ -16,3 +16,12 @@ myenv/
 
 # OS specific files
 .DS_Store
+
+# Local-only pairs trading exploration (not ready for publish)
+pairs_strategy.hpp
+wrapper_pairs.cpp
+test_pairs.py
+pairs_trading_plan.md
+
+# Local-only QQQ/TLT exploration (not ready for publish)
+test_qqq_tlt.py
