@@ -76,6 +76,7 @@ print(f"==========================================")
 print(f"YOUR STRATEGY VALUATION: ${engine.compute_equity():.2f}")
 print(f"BUY & HOLD BENCHMARK VALUATION: ${ending_value_bh:.2f}")
 print(f"==========================================")
+print("hello yohan")
 
 
 
