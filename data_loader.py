@@ -89,3 +89,31 @@ def get_data2(tickers, start, end, top_n=15):
         "close": close_df,
         "daily_universe": daily_universe
     }
+
+def get_data_volatility(tickers, start, end, top_n=15, vol_window=20):
+    # Same shape as get_data2, but ranks the daily universe by trailing
+    # realized volatility (rolling stdev of daily returns) instead of
+    # momentum. rolling(vol_window).std() at date T only looks at returns
+    # through T, so the ranking on a given day never sees future data.
+    raw = yf.download(tickers, start=start, end=end)
+
+    close_df = raw['Close']
+    high_df  = raw['High']
+    open_df  = raw['Open']
+    low_df   = raw['Low']
+
+    daily_returns = close_df.pct_change()
+    realized_vol  = daily_returns.rolling(vol_window).std()
+
+    vol_rank    = realized_vol.rank(axis=1, ascending=False)
+    is_volatile = vol_rank <= top_n
+
+    daily_universe = {date: is_volatile.columns[is_volatile.loc[date]].tolist() for date in is_volatile.index}
+
+    return {
+        "open": open_df,
+        "high": high_df,
+        "low": low_df,
+        "close": close_df,
+        "daily_universe": daily_universe
+    }

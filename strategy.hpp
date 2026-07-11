@@ -202,15 +202,18 @@ public:
 class BasicMeanReversion : public Strategy {
 private:
     static constexpr int    SMA_PERIOD      = 20;
-    static constexpr double ENTRY_THRESHOLD = 0.03;
     static constexpr int    MAX_POSITIONS   = 5;
 
     double m_stop_loss_pct;   // e.g. 0.07 = exit if down 7% from entry (0 = disabled)
     int    m_time_stop_bars;  // exit after N bars regardless (0 = disabled)
+    int    m_cooldown_bars;   // bars a symbol must sit out after an exit before re-entry (0 = disabled)
+    double m_entry_threshold; // e.g. 0.03 = enter when close is 3% below SMA(20)
 
     std::unordered_map<std::string, std::deque<double>> close_history;
     std::unordered_map<std::string, double> entry_prices;
     std::unordered_map<std::string, int>    bars_held;
+    std::unordered_map<std::string, int>    bar_count;      // monotonic per-symbol bar counter
+    std::unordered_map<std::string, int>    cooldown_until; // bar_count value at which re-entry is allowed again
 
     static double compute_sma(const std::deque<double>& c) {
         double sum = 0.0;
@@ -219,14 +222,17 @@ private:
     }
 
 public:
-    explicit BasicMeanReversion(double stop_loss_pct = 0.0, int time_stop_bars = 0)
-        : m_stop_loss_pct(stop_loss_pct), m_time_stop_bars(time_stop_bars) {}
+    explicit BasicMeanReversion(double stop_loss_pct = 0.0, int time_stop_bars = 0, int cooldown_bars = 0, double entry_threshold = 0.03)
+        : m_stop_loss_pct(stop_loss_pct), m_time_stop_bars(time_stop_bars), m_cooldown_bars(cooldown_bars), m_entry_threshold(entry_threshold) {}
 
     void on_bar(const std::string& symbol, double /*open*/, double /*high*/, double /*low*/, double close, bool eligible_for_entry) override {
         auto& hist = close_history[symbol];
         hist.push_back(close);
         if (hist.size() > (size_t)SMA_PERIOD) hist.pop_front();
         if (hist.size() < (size_t)SMA_PERIOD) return;
+
+        int& bc = bar_count[symbol];
+        bc++;
 
         double sma = compute_sma(hist);
         int&   pos = (*m_positions_ref)[symbol];
@@ -244,6 +250,7 @@ public:
                 pos = 0;
                 bars_held[symbol]    = 0;
                 entry_prices[symbol] = 0.0;
+                if (m_cooldown_bars > 0) cooldown_until[symbol] = bc + m_cooldown_bars;
                 std::cout << "[EXIT] " << symbol << " @ " << close
                           << " | " << (stop_loss ? "Stop Loss" : (time_stop ? "Time Stop" : "SMA Revert")) << "\n";
             }
@@ -251,8 +258,9 @@ public:
         }
 
         if (!eligible_for_entry) return;
+        if (m_cooldown_bars > 0 && bc <= cooldown_until[symbol]) return;
 
-        if (close < sma * (1.0 - ENTRY_THRESHOLD)) {
+        if (close < sma * (1.0 - m_entry_threshold)) {
             int open_positions = 0;
             for (const auto& [s, p] : *m_positions_ref) if (p > 0) open_positions++;
             if (open_positions >= MAX_POSITIONS) return;
@@ -273,12 +281,12 @@ public:
 class AlphaEngine {
 public:
     AlphaEngine(double initial_cash, StrategyType type,
-                double stop_loss_pct = 0.0, int time_stop_bars = 0)
+                double stop_loss_pct = 0.0, int time_stop_bars = 0, int cooldown_bars = 0, double entry_threshold = 0.03)
         : m_cash(initial_cash)
     {
         if      (type == StrategyType::MEAN_REVERSION) active_strategy = std::make_unique<SharpMeanReversion>();
         else if (type == StrategyType::RSI)            active_strategy = std::make_unique<RSIMeanReversion>();
-        else if (type == StrategyType::BASIC_MR)       active_strategy = std::make_unique<BasicMeanReversion>(stop_loss_pct, time_stop_bars);
+        else if (type == StrategyType::BASIC_MR)       active_strategy = std::make_unique<BasicMeanReversion>(stop_loss_pct, time_stop_bars, cooldown_bars, entry_threshold);
         if (active_strategy) active_strategy->set_portfolio_refs(m_cash, positions);
     }
 

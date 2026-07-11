@@ -12,11 +12,13 @@ PYBIND11_MODULE(AlphaEngine, m) {
         .export_values();
 
     py::class_<AlphaEngine>(m, "AlphaEngine")
-        .def(py::init<double, StrategyType, double, int>(),
+        .def(py::init<double, StrategyType, double, int, int, double>(),
              py::arg("initial_cash"),
              py::arg("type"),
-             py::arg("stop_loss_pct")  = 0.0,
-             py::arg("time_stop_bars") = 0)
+             py::arg("stop_loss_pct")   = 0.0,
+             py::arg("time_stop_bars")  = 0,
+             py::arg("cooldown_bars")   = 0,
+             py::arg("entry_threshold") = 0.03)
         .def("on_bar", &AlphaEngine::on_bar,
              py::arg("symbol"),
              py::arg("open"),
